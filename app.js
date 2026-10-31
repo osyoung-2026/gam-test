@@ -313,7 +313,7 @@ async function share() {
   const grade = $("grade").textContent;
   const url = `${location.origin}${location.pathname}` +
     `?t=${encodeURIComponent(PACK.id)}&s=${total}&g=${encodeURIComponent(grade)}`;
-  const text = `심심이 테스트 · ${PACK.title} ${total}점 · ${grade}`;
+  const text = `숫자 여행 · ${PACK.title} ${total}점 · ${grade}`;
   try {
     if (navigator.share) { await navigator.share({ title: INDEX.title, text, url }); return; }
     await navigator.clipboard.writeText(`${text}\n${url}`);
