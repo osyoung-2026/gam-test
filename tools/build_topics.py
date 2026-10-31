@@ -183,9 +183,105 @@ def holidays_topic():
                "한국의 2026년 공휴일에는 지방선거일과 대체공휴일이 들어 있어 평소보다 많습니다.")
 
 
+# ── 13. 외국인 유학생 ────────────────────────────────────────────
+# 한국교육개발원(KEDI) 엑셀을 직접 내려받아 raw/ 에 넣었다. 파일 이름의 확장자가 두 번
+# 붙어 있지만 원본 그대로 둔다. 엑셀이라 openpyxl 이 필요하다 (이 주제에서만 불러온다).
+KEDI = "kedi_intl_students_2025.xlsx.xlsx"
+
+
+def half_up(x):
+    """소수 첫째 자리에서 반올림 (0.5 는 올린다. round() 는 짝수 쪽으로 보낸다)."""
+    return int(x + 0.5)
+
+
+def students_topic():
+    import openpyxl
+    wb = openpyxl.load_workbook(RAW / KEDI, read_only=True, data_only=True)
+
+    # '국가, 지역별' — 연도 칸이 2025 인 줄이 나라·지역 하나. 4번째 칸 어학연수, 마지막 칸 합계
+    C = [r for r in wb["국가, 지역별"].iter_rows(values_only=True) if r[0] == 2025]
+    total = sum(r[23] for r in C)
+    sent = [r for r in C if r[23] >= 1]
+    top4 = sorted(C, key=lambda r: -r[23])[:4]
+    assert top4[0][23] != top4[1][23], "1위가 둘 이상입니다"
+    lang = sum(r[3] for r in C)
+    lang_pct = lang / total * 100
+
+    # '형태별' — 학교 하나에 한 줄. 6번째 칸 자비유학생, 마지막 칸 계
+    F = [r for r in wb["형태별"].iter_rows(values_only=True) if r[0] == 2025]
+    self_n = sum(r[5] for r in F)
+    self_tot = sum(r[10] for r in F)
+    self_pct = self_n / self_tot * 100
+
+    # '총괄' — 표 제목 칸(두 번째 칸)으로 줄을 찾는다
+    G = list(wb["총괄"].iter_rows(values_only=True))
+    label = lambda r: str(r[1] or "").replace(" ", "")
+    head = next(i for i, r in enumerate(G) if label(r) == "연도")
+    yearly = {int(str(y).rstrip("년")): v for y, v in zip(G[head][2:], G[head + 1][2:])
+              if y is not None and v is not None}
+    form_head = next(r for r in G if label(r) == "유학형태")
+    col25 = list(form_head).index("2025년")
+    g_self = next(r for r in G if label(r) == "자비유학생")[col25]
+    g_tot = next(r for r in G if label(r) == "합계")[col25]
+    # 시트끼리 숫자가 맞는지 확인한다 — 어긋나면 어느 쪽이 맞는지 사람이 봐야 한다
+    assert self_n == g_self and self_tot == g_tot, "형태별 시트와 총괄 시트의 자비유학생 수가 다릅니다"
+    assert total == yearly[2025], "국가, 지역별 시트 합계와 총괄의 2025년 값이 다릅니다"
+
+    # 2003년은 조사 범위가 달라(원격대학·각종학교 제외) 2004년부터 비교한다
+    drops = [y for y in range(2005, 2026) if yearly[y] < yearly[y - 1]]
+    # 슬라이더는 오차율로 채점하므로 정답이 0이면 나눌 수 없다
+    assert drops, "줄어든 해가 0번입니다"
+
+    when = "2025년 4월 1일 기준"
+    topic(
+        "intl-students", "🎓", "한국에 온 외국인 유학생",
+        "2025년 4월 1일 기준, 국내 대학의 외국인 유학생",
+        "교육부 보도자료 첨부 (한국교육개발원 통계)",
+        "https://www.moe.go.kr/boardCnts/viewRenew.do?boardID=350&lev=0&statusYN=W"
+        "&s=moe&m=0309&opType=N&boardSeq=104243",
+        [
+            slider("u1", "2025년 한국 대학에 유학생을 보낸 나라·지역은 몇 곳일까요?",
+                   len(sent), "곳", 50, 250, 1,
+                   f"{when} '국가, 지역별' 시트에서 합계가 1명 이상인 나라·지역을 세면 "
+                   f"{len(sent)}곳입니다 (대만·홍콩처럼 나라가 아닌 지역도 한 곳으로 셈)",
+                   "유학생 하면 몇몇 나라만 떠오르지만, 한두 명이라도 보낸 곳까지 세면 "
+                   "목록이 훨씬 길어집니다."),
+            choice("u2", "2025년 한국에 유학생이 가장 많이 온 나라는 어디일까요?",
+                   sorted(r[2] for r in top4), top4[0][2],
+                   f"{when} '국가, 지역별' 시트의 합계를 비교하면 "
+                   + " · ".join(f"{i}위 {r[2]} {r[23]:,}명" for i, r in enumerate(top4, 1)),
+                   "오래 1위였던 나라가 지금도 1위인지, 격차가 얼마나 되는지는 최근 "
+                   "숫자를 봐야 압니다."),
+            slider("u3", "2025년 외국인 유학생 가운데 어학연수생은 몇 %일까요?",
+                   half_up(lang_pct), "%", 0, 100, 1,
+                   f"{when} '국가, 지역별' 시트의 어학연수 {lang:,}명 ÷ 전체 {total:,}명 "
+                   f"× 100 = {lang_pct:.2f}%를 소수 첫째 자리에서 반올림한 값입니다",
+                   "유학생은 모두 학위를 받으러 온다고 생각하기 쉽지만, 한국어를 배우러 "
+                   "온 어학연수생도 큰 몫을 차지합니다."),
+            slider("u4", "2025년 외국인 유학생 가운데 장학금 없이 스스로 비용을 내는 자비유학생은 몇 %일까요?",
+                   half_up(self_pct), "%", 0, 100, 1,
+                   f"{when} '형태별' 시트의 자비유학생 {self_n:,}명 ÷ 전체 {self_tot:,}명 "
+                   f"× 100 = {self_pct:.2f}%를 소수 첫째 자리에서 반올림한 값입니다 "
+                   f"('총괄' 시트의 자비유학생 수와 같음)",
+                   "유학생은 장학금을 받고 온다는 인상이 있지만, 장학생은 생각보다 "
+                   "적습니다."),
+            slider("u5", "2004년부터 2025년까지, 유학생 수가 전년보다 줄어든 해는 몇 번일까요?",
+                   len(drops), "번", 0, len(range(2005, 2026)), 1,
+                   f"'총괄' 시트의 연도별 유학생 수(매년 4월 1일 기준)에서 2005~2025년을 "
+                   f"각각 전년과 비교하면 줄어든 해는 {len(drops)}번입니다 "
+                   f"({', '.join(f'{y}년' for y in drops)})",
+                   "유학생은 해마다 늘기만 한 것 같지만, 줄어든 해가 이어진 구간도 "
+                   "있습니다."),
+        ],
+        caveat="2025년 4월 1일 기준 한국교육개발원 통계라서, 법무부 체류 외국인 통계와는 "
+               "세는 기준이 달라 숫자가 다를 수 있습니다. "
+               "2003년까지는 조사 범위가 좁아 연도 비교는 2004년 이후로 했습니다. "
+               "대만·홍콩처럼 나라가 아닌 지역도 원본대로 한 곳으로 셌습니다.")
+
+
 # --only <id> 를 주면 그 주제만 계산해 topics/<id>.json 을 쓰고, topics.json 목록에서
 # 그 줄만 넣거나 바꾼다. 다른 주제는 계산하지 않고, 정답지도 건드리지 않는다.
-ONLY = {"holidays": holidays_topic}
+ONLY = {"holidays": holidays_topic, "intl-students": students_topic}
 if "--only" in sys.argv:
     tid = sys.argv[sys.argv.index("--only") + 1]
     assert tid in ONLY, f"--only 로 쓸 수 있는 주제: {', '.join(ONLY)}"
@@ -835,6 +931,7 @@ topic(
            "적설 기록과 다르게 나옵니다.")
 
 holidays_topic()
+students_topic()
 
 
 # ════════════════════════════════════════════════════════════════
