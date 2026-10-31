@@ -65,6 +65,16 @@ function directionOf(q, mine) {
   return d > 0 ? "높게" : "낮게";
 }
 
+/* 안내판 글자 타일 — 한 글자에 한 칸, 빈칸은 틈으로 둔다 */
+function flap(el, text) {
+  el.innerHTML = "";
+  [...String(text)].forEach((c) => {
+    const i = document.createElement("i");
+    if (c === " ") i.className = "sp"; else i.textContent = c;
+    el.appendChild(i);
+  });
+}
+
 function show(name) {
   Object.entries(views).forEach(([k, el]) => (el.hidden = k !== name));
   window.scrollTo({ top: 0 });
@@ -75,6 +85,7 @@ async function boot() {
   INDEX = await (await fetch("topics.json")).json();
   $("title").textContent = INDEX.title;
   $("subtitle").textContent = INDEX.subtitle;
+  flap($("board-flap"), INDEX.title);
 
   const p = new URLSearchParams(location.search);
   if (p.has("s")) {
@@ -103,14 +114,22 @@ function renderGrid() {
   $("progress-note").textContent =
     n ? `${INDEX.topics.length}개 중 ${n}개 풀었습니다` : "";
   $("topic-grid").innerHTML = "";
-  INDEX.topics.forEach((t) => {
+  INDEX.topics.forEach((t, i) => {
     const b = document.createElement("button");
     b.className = "tcard" + (t.id in done ? " done" : "");
+    // 게이트 번호는 장식이다 — A01 · B02 · C03 … 순서대로 붙인다
+    const gate = "ABC"[i % 3] + String(i + 1).padStart(2, "0");
     b.innerHTML =
-      `<span class="temoji">${t.emoji}</span>` +
-      `<span class="ttitle">${t.title}</span>` +
-      `<span class="tblurb">${t.blurb}</span>` +
-      (t.id in done ? `<span class="tscore">${done[t.id]}점</span>` : "");
+      `<span class="tmain">` +
+        `<span class="tgate">GATE <b>${gate}</b></span>` +
+        `<span class="thead"><span class="temoji">${t.emoji}</span>` +
+        `<span class="ttitle">${t.title}</span></span>` +
+      `</span>` +
+      `<span class="tstub">` +
+        `<span class="tblurb">${t.blurb}</span>` +
+        (t.id in done ? `<span class="tscore">${done[t.id]}점</span>` : "") +
+        `<span class="tcode"></span>` +
+      `</span>`;
     b.onclick = () => start(t.id);
     $("topic-grid").appendChild(b);
   });
@@ -129,6 +148,8 @@ function renderQ() {
   const q = PACK.questions[idx];
   $("progress-bar").style.width = `${(idx / PACK.questions.length) * 100}%`;
   $("q-count").textContent = `${idx + 1} / ${PACK.questions.length}`;
+  $("route-stops").innerHTML = PACK.questions.map((_, i) =>
+    `<li class="${i < idx ? "past" : i === idx ? "now" : ""}"><span>Q${i + 1}</span></li>`).join("");
   $("q-text").textContent = q.text;
   $("btn-next").textContent =
     idx === PACK.questions.length - 1 ? "결과 보기" : "다음";
@@ -164,7 +185,12 @@ function renderQ() {
     $("slider-max").textContent = `${q.max}${q.unit}`;
     const paint = () => {
       answers[idx] = Number(s.value);
-      $("slider-out").textContent = `${s.value}${q.unit}`;
+      // 숫자는 한 칸씩 타일로, 단위는 옆에 작게. 손잡이 왼쪽은 --p 까지 칠한다
+      flap($("slider-out"), s.value);
+      const u = document.createElement("small");
+      u.textContent = q.unit;
+      $("slider-out").appendChild(u);
+      s.style.setProperty("--p", `${(s.value - q.min) / (q.max - q.min) * 100}%`);
     };
     s.oninput = paint;
     paint();

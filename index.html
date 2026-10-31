@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>심심이 테스트</title>
 <meta name="description" content="공개 데이터로 만든 추측 게임. 10개 주제, 주제당 5문항.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;700&family=Noto+Sans+KR:wght@400;500;700;900&display=swap">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -13,9 +16,13 @@
 
   <!-- 주제 고르기 ──────────────────────────────── -->
   <section id="view-home" class="view">
+    <div class="board">
+      <span class="board-label"><i class="lamp"></i>DEPARTURES</span>
+      <span id="board-flap" class="flap" aria-hidden="true"></span>
+    </div>
     <p id="shared-banner" class="banner" hidden></p>
     <div class="hero">
-      <div class="badge-day">공개 데이터</div>
+      <div class="badge-day stamp">공개 데이터</div>
       <h1 id="title">심심이 테스트</h1>
       <p id="subtitle" class="muted"></p>
       <p class="lead">주제를 하나 고르세요. 5문항, 1분이면 끝납니다.</p>
@@ -29,17 +36,25 @@
   <!-- 문항 ───────────────────────────────────── -->
   <section id="view-quiz" class="view" hidden>
     <button id="btn-back" class="linkish">← 주제 고르기</button>
-    <p id="topic-name" class="muted small"></p>
-    <div class="progress"><div id="progress-bar"></div></div>
-    <p id="q-count" class="muted small"></p>
-    <h2 id="q-text"></h2>
+    <div class="board">
+      <p id="topic-name" class="board-label"></p>
+      <p id="q-count" class="flap-count"></p>
+    </div>
+    <div class="route">
+      <div class="progress"><div id="progress-bar"></div></div>
+      <ol id="route-stops" class="stops" aria-hidden="true"></ol>
+    </div>
 
-    <div id="q-choice" class="choices" hidden></div>
+    <div class="qcard">
+      <h2 id="q-text"></h2>
 
-    <div id="q-slider" hidden>
-      <output id="slider-out" class="slider-out"></output>
-      <input type="range" id="slider" aria-label="추측 값">
-      <div class="slider-ends"><span id="slider-min"></span><span id="slider-max"></span></div>
+      <div id="q-choice" class="choices" hidden></div>
+
+      <div id="q-slider" hidden>
+        <output id="slider-out" class="slider-out"></output>
+        <input type="range" id="slider" aria-label="추측 값">
+        <div class="slider-ends"><span id="slider-min"></span><span id="slider-max"></span></div>
+      </div>
     </div>
 
     <button id="btn-next" class="primary" disabled>다음</button>
