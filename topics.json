@@ -127,6 +127,13 @@
       "title": "서울엔 눈이 얼마나 오나",
       "blurb": "1990년부터 2024년까지, 서울의 하루 강설량",
       "source": "Open-Meteo Archive (ERA5 재분석)"
+    },
+    {
+      "id": "holidays",
+      "emoji": "🗓️",
+      "title": "나라별 공휴일",
+      "blurb": "2026년, 203개 나라·지역의 전국 공휴일",
+      "source": "Nager.Date"
     }
   ]
 }

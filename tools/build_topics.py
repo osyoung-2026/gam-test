@@ -84,6 +84,131 @@ def choice(qid, text, options, answer, basis, why):
             "answer": answer, "basis": basis, "why": why}
 
 
+def pack_of(t):
+    """앱이 읽는 topics/<id>.json 한 개의 내용."""
+    assert len(t["questions"]) == 5, f"{t['id']}: 문항이 5개가 아닙니다"
+    pack = {k: t[k] for k in ("id", "emoji", "title", "blurb",
+                              "source", "source_url", "caveat")}
+    pack["questions"] = t["questions"]
+    return pack
+
+
+def index_of(t):
+    """topics.json 목록에 들어가는 한 줄."""
+    return {k: t[k] for k in ("id", "emoji", "title", "blurb", "source")}
+
+
+# ── 12. 공휴일 ───────────────────────────────────────────────────
+# '전국 공휴일' = global 이 true 이고 types 에 Public 이 있는 날.
+# global 만 보면 라트비아처럼 쉬지 않는 기념일(Observance)이 대부분인 나라가 1위가 된다.
+# 한 나라에서 같은 날짜가 여러 줄이면 하루로 센다 (날짜를 집합으로 모은다).
+HOL_YEAR = 2026
+# 원본이 실제와 다르다고 판단한 나라는 계산할 때만 뺀다 (원본 파일은 그대로 둔다).
+#   SV 엘살바도르: 1~4월이 비어 있고(1월 1일 · 성주간 없음), 8월 축제와 푸푸사 축제가
+#                  날마다 쉬는 날(Public)로 들어 있다
+HOL_EXCLUDE = {"SV"}
+
+
+def holidays_topic():
+    names = {c["countryCode"]: c["name"] for c in load_json("nager_countries.json")
+             if c["countryCode"] not in HOL_EXCLUDE}
+    H = {code: {r["date"] for r in load_json(f"nager_{HOL_YEAR}/{code}.json")
+                if r["global"] and "Public" in r["types"]}
+         for code in names}
+    n = len(H)
+    cnt = {k: len(v) for k, v in H.items()}
+
+    kr = cnt["KR"]
+    kr_more = sum(1 for v in cnt.values() if v > kr)
+    kr_tie = sum(1 for v in cnt.values() if v == kr) - 1
+    kr_rank = kr_more + 1                         # 같은 수는 같은 순위 (공동 순위)
+
+    top_n = max(cnt.values())
+    top_who = [names[k] for k, v in cnt.items() if v == top_n]
+
+    dec25 = sum(1 for v in H.values() if f"{HOL_YEAR}-12-25" in v)
+    no_jan1 = [names[k] for k, v in H.items() if f"{HOL_YEAR}-01-01" not in v]
+    # 슬라이더는 오차율로 채점하므로 정답이 0이면 나눌 수 없다
+    assert no_jan1, "1월 1일이 공휴일이 아닌 나라가 0개국입니다"
+
+    by_m = Counter(int(d[5:7]) for v in H.values() for d in v)
+    top_m, top_mc = by_m.most_common(1)[0]
+    assert sum(1 for c in by_m.values() if c == top_mc) == 1, "가장 많은 달이 둘 이상입니다"
+
+    rule = "global 이 true 이고 쉬는 날(Public)인 것, 같은 날짜는 하루"
+    topic(
+        "holidays", "🗓️", "나라별 공휴일",
+        f"{HOL_YEAR}년, {n}개 나라·지역의 전국 공휴일",
+        "Nager.Date", "https://date.nager.at/",
+        [
+            slider("d1", f"{HOL_YEAR}년 전국 공휴일 수로 {n}개 나라·지역을 줄 세우면, 한국은 몇 위일까요?",
+                   kr_rank, "위", 1, n, 1,
+                   f"{HOL_YEAR}년 전국 공휴일({rule})을 나라별로 세어 많은 순으로 "
+                   f"줄 세우면 한국은 {kr}일로 {n}개 나라·지역 중 "
+                   f"{'공동 ' if kr_tie else ''}{kr_rank}위입니다"
+                   f" (한국보다 많은 곳 {kr_more}곳 · 같은 곳 {kr_tie}곳)",
+                   "'한국은 쉬는 날이 많다'는 말을 자주 듣지만, 세계 전체에 놓고 "
+                   "세어 보면 자리가 다릅니다."),
+            slider("d2", f"{HOL_YEAR}년 전국 공휴일이 가장 많은 나라는 며칠을 쉴까요?",
+                   top_n, "일", 5, 40, 1,
+                   f"{HOL_YEAR}년 전국 공휴일({rule})을 나라별로 세었을 때 "
+                   f"가장 많은 나라는 {' · '.join(top_who)} {top_n}일입니다",
+                   "가장 많이 쉬는 나라라고 해도 한 달 넘게 쉬지는 않습니다. "
+                   "공휴일 수는 나라마다 생각보다 고르게 모여 있습니다."),
+            slider("d3", f"{HOL_YEAR}년 12월 25일을 전국 공휴일로 두는 곳은 {n}개 나라·지역 중 몇 곳일까요?",
+                   dec25, "곳", 0, n, 1,
+                   f"{HOL_YEAR}년 12월 25일이 전국 공휴일({rule})인 곳을 세면 "
+                   f"{n}개 나라·지역 중 {dec25}곳입니다",
+                   "성탄절은 종교 기념일이지만, 기독교 인구가 많지 않은 나라도 "
+                   "공휴일로 두는 경우가 많습니다."),
+            slider("d4", f"{HOL_YEAR}년 1월 1일이 전국 공휴일이 아닌 곳은 {n}개 나라·지역 중 몇 곳일까요?",
+                   len(no_jan1), "곳", 0, 50, 1,
+                   f"{HOL_YEAR}년 1월 1일이 전국 공휴일({rule})이 아닌 곳을 세면 "
+                   f"{n}개 나라·지역 중 {len(no_jan1)}곳입니다 ({', '.join(no_jan1)})",
+                   "새해 첫날은 어디서나 쉰다고 생각하기 쉽지만, 새해를 다른 달력으로 "
+                   "쇠거나 1월 1일을 공휴일로 두지 않는 나라가 있습니다. 영국처럼 실제로는 "
+                   "쉬지만 원본에 지역별로만 적혀 있거나 빠져 있어 세지 않은 곳도 있습니다."),
+            choice("d5", f"{HOL_YEAR}년 {n}개 나라·지역의 전국 공휴일을 달별로 모으면, 가장 많이 몰린 달은 몇 월일까요?",
+                   ["1월", "4월", "5월", "12월"], f"{top_m}월",
+                   f"{HOL_YEAR}년 {n}개 나라·지역의 전국 공휴일({rule}) 날짜를 달별로 모두 "
+                   f"더하면 {top_m}월이 {top_mc}일로 가장 많습니다 · "
+                   + " · ".join(f"{m}월 {by_m[m]}일" for m in (1, 4, 5, 12)),
+                   "연말연시가 가장 붐빌 것 같지만, 부활절 같은 날짜가 바뀌는 "
+                   "공휴일과 노동절이 다른 달에 몰립니다."),
+        ],
+        caveat="전국 공휴일 중 쉬는 날(Public)인 것만 셌습니다. "
+               "엘살바도르는 원본이 실제와 달라 뺐고, 영국처럼 공휴일이 지역별로만 "
+               "적힌 곳은 그 날을 세지 않았습니다. "
+               "Nager.Date 목록에는 푸에르토리코처럼 나라가 아닌 지역도 들어 있습니다. "
+               "한국의 2026년 공휴일에는 지방선거일과 대체공휴일이 들어 있어 평소보다 많습니다.")
+
+
+# --only <id> 를 주면 그 주제만 계산해 topics/<id>.json 을 쓰고, topics.json 목록에서
+# 그 줄만 넣거나 바꾼다. 다른 주제는 계산하지 않고, 정답지도 건드리지 않는다.
+ONLY = {"holidays": holidays_topic}
+if "--only" in sys.argv:
+    tid = sys.argv[sys.argv.index("--only") + 1]
+    assert tid in ONLY, f"--only 로 쓸 수 있는 주제: {', '.join(ONLY)}"
+    ONLY[tid]()
+    t = TOPICS[-1]
+    io.open(OUT / f"{t['id']}.json", "w", encoding="utf-8").write(
+        json.dumps(pack_of(t), ensure_ascii=False, indent=2))
+    idx = json.load(io.open(APP / "topics.json", encoding="utf-8"))
+    ids = [x["id"] for x in idx["topics"]]
+    if t["id"] in ids:
+        idx["topics"][ids.index(t["id"])] = index_of(t)
+    else:
+        idx["topics"].append(index_of(t))
+    io.open(APP / "topics.json", "w", encoding="utf-8").write(
+        json.dumps(idx, ensure_ascii=False, indent=2))
+    print(f"{t['emoji']} {t['title']}  ({t['source']}) — topics/{t['id']}.json · topics.json 목록")
+    for q in t["questions"]:
+        a = f"{q['answer']}{q.get('unit', '')}" if q["type"] == "slider" else q["answer"]
+        print(f"    [{q['type'][:6]:<6}] {q['text'][:44]:<44} → {a}")
+        print(f"             근거 {q['basis']}")
+    sys.exit(0)
+
+
 # ════════════════════════════════════════════════════════════════
 # 기상 공통
 # ════════════════════════════════════════════════════════════════
@@ -709,20 +834,17 @@ topic(
            "'쌓인 눈의 깊이(적설)'가 아닙니다. 그래서 기상청 서울 관측소의 "
            "적설 기록과 다르게 나옵니다.")
 
+holidays_topic()
+
 
 # ════════════════════════════════════════════════════════════════
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     index = []
     for t in TOPICS:
-        assert len(t["questions"]) == 5, f"{t['id']}: 문항이 5개가 아닙니다"
-        pack = {k: t[k] for k in ("id", "emoji", "title", "blurb",
-                                  "source", "source_url", "caveat")}
-        pack["questions"] = t["questions"]
         io.open(OUT / f"{t['id']}.json", "w", encoding="utf-8").write(
-            json.dumps(pack, ensure_ascii=False, indent=2))
-        index.append({k: t[k] for k in ("id", "emoji", "title", "blurb",
-                                        "source")})
+            json.dumps(pack_of(t), ensure_ascii=False, indent=2))
+        index.append(index_of(t))
 
     # 제목·부제는 화면을 바꾸며 고친 값을 지킨다 (2장에서 내 제목으로 바꾼다).
     # 다시 계산해도 내 제목이 «감 테스트»로 돌아가지 않게, 있던 값을 읽어 쓴다

@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import http.client
+import json
 import sys
 import time
 import urllib.error
@@ -124,7 +125,16 @@ SOURCES: list[tuple[str, str, str]] = [
      "?format=geojson&starttime=2000-01-01&endtime=2024-12-31"
      "&minmagnitude=3.0&minlatitude=33&maxlatitude=39.5"
      "&minlongitude=124&maxlongitude=132&limit=20000"),
+
+    ("nager_countries.json",
+     "Nager.Date 가 공휴일을 주는 나라 목록 — 이 목록대로 나라별 공휴일을 받습니다",
+     "https://date.nager.at/api/v3/AvailableCountries"),
 ]
+
+# 공휴일은 나라 하나에 주소 하나다. 한 번에 주는 주소가 없으므로
+# nager_countries.json 을 읽어 나라마다 따로 받고, 받은 그대로 나라별 파일로 둔다.
+NAGER_YEAR = 2026
+NAGER_DIR = RAW / f"nager_{NAGER_YEAR}"
 
 
 def get(url: str, dest: Path, tries: int = 4) -> int:
@@ -156,6 +166,33 @@ def get(url: str, dest: Path, tries: int = 4) -> int:
     raise RuntimeError("도달 불가")
 
 
+def fetch_nager(force: bool) -> int:
+    """nager_countries.json 의 나라마다 NAGER_YEAR 공휴일을 받는다. 실패 건수를 돌려준다."""
+    src = RAW / "nager_countries.json"
+    if not src.exists():
+        print(f"  실패    nager_{NAGER_YEAR}/          나라 목록(nager_countries.json)이 없습니다")
+        return 1
+    codes = [c["countryCode"] for c in json.loads(src.read_text(encoding="utf-8"))]
+    NAGER_DIR.mkdir(parents=True, exist_ok=True)
+    got = skip = 0
+    failed: list[str] = []
+    for code in codes:
+        dest = NAGER_DIR / f"{code}.json"
+        if dest.exists() and not force:
+            skip += 1
+            continue
+        try:
+            get(f"https://date.nager.at/api/v3/PublicHolidays/{NAGER_YEAR}/{code}", dest)
+            got += 1
+        except (urllib.error.URLError, TimeoutError, ConnectionError, http.client.IncompleteRead) as e:
+            print(f"  실패    nager_{NAGER_YEAR}/{code}.json {e}")
+            failed.append(code)
+        time.sleep(0.4)          # 상대 서버에 예의를 지킨다
+    print(f"  받음    nager_{NAGER_YEAR}/          {len(codes)}개 나라 · 새로 {got} · 건너뜀 {skip} · 실패 {len(failed)}"
+          f"  {NAGER_YEAR}년 공휴일 (Nager.Date)")
+    return len(failed)
+
+
 def main() -> int:
     force = "--force" in sys.argv
     RAW.mkdir(parents=True, exist_ok=True)
@@ -174,8 +211,10 @@ def main() -> int:
             fail += 1
         time.sleep(0.4)          # 상대 서버에 예의를 지킨다
 
+    fail += fetch_nager(force)
+
     print()
-    print(f"총 {len(SOURCES)}건 / 실패 {fail}건 · 저장 위치 {RAW}")
+    print(f"총 {len(SOURCES)}건 + 공휴일 나라별 / 실패 {fail}건 · 저장 위치 {RAW}")
     if fail:
         print("실패한 것은 잠시 뒤 다시 실행하면 대개 받아집니다.")
     return 1 if fail else 0
